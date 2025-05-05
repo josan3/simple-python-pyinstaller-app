@@ -1,25 +1,33 @@
 pipeline {
-    agent none
+    agent any
+    options {
+        skipStagesAfterUnstable()
+    }
     stages {
         stage('Build') {
-            agent {
-                docker {
-                    image 'python:2-alpine'
-                }
-            }
             steps {
                 sh 'python -m py_compile sources/add2vals.py sources/calc.py'
+                stash(name: 'compiled-results', includes: 'sources/*.py*')
             }
         }
-        stage('Keep Alive') {
-            agent {
-                docker {
-                    image 'python:2-alpine'
+        stage('Test') {
+            steps {
+                sh 'py.test --junit-xml test-reports/results.xml sources/test_calc.py'
+            }
+            post {
+                always {
+                    junit 'test-reports/results.xml'
                 }
             }
+        }
+        stage('Deliver') { 
             steps {
-                echo 'Manteniendo el contenedor activo...'
-                sh 'tail -f /dev/null'
+                sh "pyinstaller --onefile sources/add2vals.py" 
+            }
+            post {
+                success {
+                    archiveArtifacts 'dist/add2vals' 
+                }
             }
         }
     }
